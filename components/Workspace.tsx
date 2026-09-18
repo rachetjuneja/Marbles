@@ -241,6 +241,31 @@ export default function Workspace({
     </div>
   );
 
+  // Book match toggle + live studio, shared by the Tiles step and the Surface step.
+  const bookmatchPanel = (
+    <>
+      <div className="card p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm">Book match</span>
+          <button onClick={() => setBookmatch((b) => !b)}
+            className={`w-[38px] h-[22px] rounded-full relative border ${bookmatch ? "bg-accent/25 border-accent" : "bg-panel2 border-line"}`}>
+            <span className={`absolute top-[2px] w-4 h-4 rounded-full transition-all ${bookmatch ? "left-[18px] bg-accent" : "left-[2px] bg-muted"}`} />
+          </button>
+        </div>
+        {!modelAvailable && <div className="text-danger text-[11px] mt-2">The chosen model has no API key set. Add it to .env.local to generate.</div>}
+      </div>
+      {bookmatch && (
+        <BookmatchStudio
+          tile={tiles[0] || null}
+          options={bm}
+          onChange={(o) => { setBm(o); setBmTouched(true); }}
+          areaSqft={effectiveArea}
+          suggestion={selected[0] ? suggestPattern(selected[0].surface) : undefined}
+        />
+      )}
+    </>
+  );
+
   return (
     <main className="min-h-screen flex flex-col">
       <header className="flex items-center gap-4 px-5 py-3 border-b border-line sticky top-0 bg-[#0f0f11] z-20 flex-wrap">
@@ -288,8 +313,9 @@ export default function Workspace({
       {/* Body */}
       <div className="flex-1 p-5">
         {step === 1 && (
-          <div className="max-w-5xl mx-auto">
-            <TilePicker projectId={projectId} value={tiles} onChange={setTiles} />
+          <div className="grid lg:grid-cols-[1fr_360px] gap-5">
+            <div className="min-w-0"><TilePicker projectId={projectId} value={tiles} onChange={setTiles} /></div>
+            <div className="flex flex-col gap-4">{bookmatchPanel}</div>
           </div>
         )}
 
@@ -357,27 +383,7 @@ export default function Workspace({
                     )}
                     <div className="text-faint text-[11px] mt-3">Hover a surface to preview it on the room.</div>
                   </div>
-
-                  <div className="card p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Book match</span>
-                      <button onClick={() => setBookmatch((b) => !b)}
-                        className={`w-[38px] h-[22px] rounded-full relative border ${bookmatch ? "bg-accent/25 border-accent" : "bg-panel2 border-line"}`}>
-                        <span className={`absolute top-[2px] w-4 h-4 rounded-full transition-all ${bookmatch ? "left-[18px] bg-accent" : "left-[2px] bg-muted"}`} />
-                      </button>
-                    </div>
-                    {!modelAvailable && <div className="text-danger text-[11px] mt-2">The chosen model has no API key set. Add it to .env.local to generate.</div>}
-                  </div>
-
-                  {bookmatch && (
-                    <BookmatchStudio
-                      tile={tiles[0] || null}
-                      options={bm}
-                      onChange={(o) => { setBm(o); setBmTouched(true); }}
-                      areaSqft={effectiveArea}
-                      suggestion={selected[0] ? suggestPattern(selected[0].surface) : undefined}
-                    />
-                  )}
+                  {bookmatchPanel}
                 </>
               )}
             </div>

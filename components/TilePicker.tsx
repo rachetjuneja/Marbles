@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { LIBRARY_STONES } from "@/lib/library";
 import { STONE_TYPES, FINISHES } from "@/lib/types";
 import type { StoneMeta } from "@/lib/types";
@@ -34,7 +34,7 @@ function Diamond({ s, on, onClick }: { s: PickedStone; on: boolean; onClick: () 
   );
 }
 
-/** Multi-select tile catalogue: pick several marbles and/or add uploaded ones with details. */
+/** Multi-select tile catalogue with inventory search + filters. */
 export default function TilePicker({
   projectId,
   value,
@@ -48,12 +48,37 @@ export default function TilePicker({
   const [pending, setPending] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
 
+  // Inventory controls
+  const [q, setQ] = useState("");
+  const [typeF, setTypeF] = useState("");
+  const [finishF, setFinishF] = useState("");
+  const [sort, setSort] = useState("featured");
+
   const has = (url: string) => value.some((v) => v.imageUrl === url);
   const toggle = (s: PickedStone) => {
     if (has(s.imageUrl)) onChange(value.filter((v) => v.imageUrl !== s.imageUrl));
     else onChange([...value, s]);
   };
   const uploads = value.filter((v) => v.source === "upload");
+
+  const all = useMemo<PickedStone[]>(() => [...(LIBRARY_STONES as PickedStone[]), ...uploads], [uploads]);
+
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    let list = all.filter((s) => {
+      if (typeF && (s.stoneType || "") !== typeF) return false;
+      if (finishF && (s.finish || "") !== finishF) return false;
+      if (needle) {
+        const hay = [s.name, s.stoneType, s.origin].filter(Boolean).join(" ").toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+    if (sort === "price-asc") list = [...list].sort((a, b) => (a.pricePerSqft || 0) - (b.pricePerSqft || 0));
+    else if (sort === "price-desc") list = [...list].sort((a, b) => (b.pricePerSqft || 0) - (a.pricePerSqft || 0));
+    else if (sort === "name") list = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    return list;
+  }, [all, q, typeF, finishF, sort]);
 
   function saveDetails() {
     if (!pending) return;
@@ -72,8 +97,8 @@ export default function TilePicker({
     setPending(null);
   }
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm({ ...form, [k]: e.target.value });
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
+  const activeFilters = q || typeF || finishF || sort !== "featured";
 
   return (
     <div className="card p-5">
@@ -83,15 +108,53 @@ export default function TilePicker({
         </h3>
         <button className="btn !py-1.5 !px-3 text-xs" onClick={() => setOpen(true)}>Upload</button>
       </div>
-      <p className="text-muted text-xs mb-5">Pick as many marbles as you want to compare. Each one is rendered into the room.</p>
+      <p className="text-muted text-xs mb-4">Pick as many marbles as you want to compare. Each one is rendered into the room.</p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-6">
-        {LIBRARY_STONES.map((s) => <Diamond key={s.id} s={s as PickedStone} on={has(s.imageUrl)} onClick={() => toggle(s as PickedStone)} />)}
-        {uploads.map((s) => <Diamond key={s.imageUrl} s={s} on onClick={() => toggle(s)} />)}
+      {/* Inventory toolbar */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <div className="relative flex-1 min-w-[180px]">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint text-xs">⌕</span>
+          <input
+            className="input !py-1.5 !pl-7 text-xs w-full"
+            placeholder="Search by name, type or origin"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <select className="input !py-1.5 text-xs" value={typeF} onChange={(e) => setTypeF(e.target.value)}>
+          <option value="">All types</option>
+          {STONE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select className="input !py-1.5 text-xs" value={finishF} onChange={(e) => setFinishF(e.target.value)}>
+          <option value="">All finishes</option>
+          {FINISHES.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <select className="input !py-1.5 text-xs" value={sort} onChange={(e) => setSort(e.target.value)}>
+          <option value="featured">Featured</option>
+          <option value="price-asc">Price: low to high</option>
+          <option value="price-desc">Price: high to low</option>
+          <option value="name">Name A to Z</option>
+        </select>
+        {activeFilters && (
+          <button className="text-[11px] text-muted hover:text-ink" onClick={() => { setQ(""); setTypeF(""); setFinishF(""); setSort("featured"); }}>
+            Clear
+          </button>
+        )}
       </div>
 
+      {shown.length === 0 ? (
+        <div className="text-faint text-sm text-center border border-dashed border-line rounded-xl py-12">
+          No marbles match. Adjust the filters, or upload a slab.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-6">
+          {shown.map((s) => <Diamond key={s.imageUrl} s={s} on={has(s.imageUrl)} onClick={() => toggle(s)} />)}
+        </div>
+      )}
+
       {value.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-5">
+        <div className="flex flex-wrap gap-1.5 mt-5 pt-4 border-t border-line">
+          <span className="text-[11px] text-muted mr-1">Selected:</span>
           {value.map((s) => (
             <span key={s.imageUrl} className="inline-flex items-center gap-1 text-[11px] bg-panel2 border border-line rounded-full pl-2.5 pr-1 py-0.5">
               {s.name}
