@@ -88,7 +88,7 @@ export default function Workspace({
     if (cached) {
       setDetected(cached);
       setTarget(cached[0] || null);
-      setDetectNote(cached.length ? null : "No surfaces detected. Pick one manually.");
+      setDetectNote(cached.length ? null : "Could not detect surfaces automatically. Choose the surface to apply below.");
       return;
     }
     const id = ++reqRef.current;
@@ -104,8 +104,8 @@ export default function Workspace({
         if (!surfaces.length) {
           setDetectNote(
             error && /GEMINI_API_KEY/.test(error)
-              ? "Add the Gemini key to auto detect surfaces. Pick one manually for now."
-              : "No surfaces detected automatically. Pick one manually."
+              ? "Auto detection needs your Gemini key in .env.local. For now, choose the surface to apply below."
+              : "Could not detect surfaces automatically. Choose the surface to apply below."
           );
           setManualMode(true);
         }
