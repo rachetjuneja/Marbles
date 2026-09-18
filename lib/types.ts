@@ -59,9 +59,10 @@ export interface DetectedSurface {
 export interface SavedRender {
   key: string;
   resultUrl: string;
-  surface: Surface;
+  surface: Surface; // primary/first surface, kept for compatibility
+  areaLabel?: string; // combined label when applied to several areas, e.g. "Floor + Left wall"
   stone: StoneMeta;
-  qty?: number; // sq ft, used in the cart
+  qty?: number; // sq ft, used in the cart (summed across areas)
 }
 
 export interface SceneRef {

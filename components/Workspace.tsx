@@ -13,6 +13,7 @@ import { SURFACES, SURFACE_AREA } from "@/lib/types";
 import type { SceneRef, Surface, SavedRender, DetectedSurface } from "@/lib/types";
 
 type Gen = { id: string; tile: PickedStone; url: string | null; status: "pending" | "done" | "error"; error?: string };
+type Area = { id: string; label: string; surface: Surface; promptLabel?: string };
 
 const STEP_LABELS = ["Customer", "Room", "Surface", "Tiles", "Result"];
 
@@ -32,12 +33,11 @@ export default function Workspace({
   const [step, setStep] = useState(1); // 1 Room, 2 Surface, 3 Tiles, 4 Result
   const [scene, setScene] = useState<SceneRef | null>(null);
 
-  // Detection
+  // Detection + surface selection (multiple areas allowed)
   const [detected, setDetected] = useState<DetectedSurface[]>([]);
   const [detecting, setDetecting] = useState(false);
   const [detectNote, setDetectNote] = useState<string | null>(null);
-  const [target, setTarget] = useState<DetectedSurface | null>(null);
-  const [surface, setSurface] = useState<Surface>("single_wall");
+  const [selected, setSelected] = useState<Area[]>([]);
   const [manualMode, setManualMode] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [showOverlay, setShowOverlay] = useState(true);
@@ -72,21 +72,26 @@ export default function Workspace({
   const [lightbox, setLightbox] = useState<Gen | null>(null);
   const [lbCompare, setLbCompare] = useState(false);
 
-  const effectiveSurface: Surface = target ? target.surface : surface;
-  const effectiveLabel = target ? target.label : SURFACES.find((s) => s.id === surface)?.label || "surface";
+  const areaOfDetected = (d: DetectedSurface): Area => ({ id: d.id, label: d.label, surface: d.surface, promptLabel: d.label });
+  const manualArea = (s: { id: Surface; label: string }): Area => ({ id: `m-${s.id}`, label: s.label, surface: s.id });
+  const isSel = (id: string) => selected.some((a) => a.id === id);
+  const toggleArea = (a: Area) => setSelected((prev) => (prev.some((x) => x.id === a.id) ? prev.filter((x) => x.id !== a.id) : [...prev, a]));
+
+  const effectiveLabel = selected.length ? selected.map((a) => a.label).join(" + ") : "a surface";
+  const effectiveArea = selected.reduce((s, a) => s + (SURFACE_AREA[a.surface] || 0), 0);
   const modelAvailable = !!models.find((m) => m.id === model)?.available;
 
   // Auto-detect surfaces when the room changes.
   useEffect(() => {
-    setTarget(null);
+    setSelected([]);
     setManualMode(false);
     if (!scene) { setDetected([]); setDetectNote(null); return; }
     const url = scene.imageUrl;
     const cached = cacheRef.current[url];
     if (cached) {
       setDetected(cached);
-      setTarget(cached[0] || null);
-      setDetectNote(cached.length ? null : "Could not detect surfaces automatically. Choose the surface to apply below.");
+      setSelected(cached[0] ? [areaOfDetected(cached[0])] : []);
+      setDetectNote(cached.length ? null : "Could not detect surfaces automatically. Choose the areas to apply below.");
       if (!cached.length) setManualMode(true);
       return;
     }
@@ -97,12 +102,12 @@ export default function Workspace({
         if (id !== reqRef.current) return;
         cacheRef.current[url] = surfaces;
         setDetected(surfaces);
-        setTarget(surfaces[0] || null);
+        setSelected(surfaces[0] ? [areaOfDetected(surfaces[0])] : []);
         if (!surfaces.length) {
           setDetectNote(
             error && /GEMINI_API_KEY/.test(error)
-              ? "Auto detection needs your Gemini key in .env.local. For now, choose the surface to apply below."
-              : "Could not detect surfaces automatically. Choose the surface to apply below."
+              ? "Auto detection needs your Gemini key in .env.local. For now, choose the areas to apply below."
+              : "Could not detect surfaces automatically. Choose the areas to apply below."
           );
           setManualMode(true);
         }
@@ -130,7 +135,8 @@ export default function Workspace({
   }
 
   async function runBatch() {
-    if (!scene || !tiles.length) return;
+    if (!scene || !tiles.length || !selected.length) return;
+    const targets = selected.map((a) => ({ surface: a.surface, label: a.promptLabel }));
     const items: Gen[] = tiles.map((t, i) => ({ id: `${i}-${t.imageUrl.slice(-10)}`, tile: t, url: null, status: "pending" }));
     setGens(items);
     setRunning(true);
@@ -143,8 +149,7 @@ export default function Workspace({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            projectId, sceneRef: scene.imageUrl, stoneRef,
-            surface: effectiveSurface, targetLabel: target?.label, model, bookmatch,
+            projectId, sceneRef: scene.imageUrl, stoneRef, targets, model, bookmatch,
             stone: {
               name: g.tile.name, stoneType: g.tile.stoneType, origin: g.tile.origin, size: g.tile.size,
               thicknessMm: g.tile.thicknessMm, finish: g.tile.finish, pricePerSqft: g.tile.pricePerSqft, source: g.tile.source,
@@ -163,7 +168,7 @@ export default function Workspace({
 
   function savedFrom(g: Gen): SavedRender | null {
     if (!g.url) return null;
-    return { key: g.url, resultUrl: g.url, surface: effectiveSurface, stone: g.tile };
+    return { key: g.url, resultUrl: g.url, surface: selected[0]?.surface ?? "single_wall", areaLabel: effectiveLabel, stone: g.tile };
   }
   function addWishlist(g: Gen) {
     const it = savedFrom(g); if (!it) return;
@@ -172,21 +177,21 @@ export default function Workspace({
   }
   function addCart(g: Gen) {
     const it = savedFrom(g); if (!it) return;
-    setCart((l) => (l.some((c) => c.key === it.key) ? l : [{ ...it, qty: SURFACE_AREA[effectiveSurface] }, ...l]));
+    setCart((l) => (l.some((c) => c.key === it.key) ? l : [{ ...it, qty: effectiveArea }, ...l]));
     setPanel("cart");
   }
 
   function goStep(t: number) {
     if (t <= step) { setStep(t); return; }
     if (t === 2 && scene) setStep(2);
-    else if (t === 3 && scene && !detecting) setStep(3);
+    else if (t === 3 && scene && !detecting && selected.length) setStep(3);
     else if (t === 4 && gens.length) setStep(4);
   }
 
   const doneCount = gens.filter((g) => g.status !== "pending").length;
 
   // Shared room stage (steps 1..3)
-  const overlayList = step === 2 ? detected : step === 3 && target ? [target] : [];
+  const overlayList = step === 2 ? detected : step === 3 ? detected.filter((d) => isSel(d.id)) : [];
   const overlayVisible = showOverlay && step <= 3 && !!scene && overlayList.length > 0;
   const stage = (
     <div ref={stageRef} className="relative rounded-2xl overflow-hidden border border-line bg-black aspect-[16/10]">
@@ -199,15 +204,15 @@ export default function Workspace({
         <div className="absolute" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}>
           <SurfaceOverlay
             surfaces={overlayList}
-            activeId={target?.id ?? null}
+            activeIds={selected.map((a) => a.id)}
             hoverId={hoverId}
-            onPick={(s) => { setTarget(s); setManualMode(false); }}
+            onPick={(s) => toggleArea(areaOfDetected(s))}
             onHover={setHoverId}
           />
         </div>
       )}
-      {scene && (step === 2 || step === 3) && target && (
-        <div className="absolute left-3 top-3 text-[11px] px-2 py-1 rounded-md bg-black/70 border border-line pointer-events-none">
+      {scene && (step === 2 || step === 3) && selected.length > 0 && (
+        <div className="absolute left-3 top-3 text-[11px] px-2 py-1 rounded-md bg-black/70 border border-line pointer-events-none max-w-[80%]">
           Applying to <span className="text-accent font-medium">{effectiveLabel}</span>
         </div>
       )}
@@ -272,8 +277,8 @@ export default function Workspace({
               {stage}
               <div className="text-muted text-xs mt-2">
                 {step === 1 && "Choose a room from the library, or scan the QR to let the customer send a photo from their phone."}
-                {step === 2 && "We scanned the room for surfaces. Pick where the marble should go. It highlights on the photo."}
-                {step === 3 && (target || !detected.length ? `Marble will be applied to ${effectiveLabel}. Now pick the tiles to compare.` : "")}
+                {step === 2 && "We scanned the room for surfaces. Tick every area the marble should cover. They highlight on the photo."}
+                {step === 3 && (selected.length ? `Marble will be applied to ${effectiveLabel}. Now pick the tiles to compare.` : "")}
               </div>
             </div>
 
@@ -286,26 +291,28 @@ export default function Workspace({
                     <h3 className="font-display text-base">Where does the marble go?</h3>
                     {detected.length > 0 && (
                       <button className="text-[11px] text-muted hover:text-ink" onClick={() => setManualMode((v) => !v)}>
-                        {manualMode ? "Use detected" : "Set manually"}
+                        {manualMode ? "Use detected" : "Add manually"}
                       </button>
                     )}
                   </div>
+                  <p className="text-muted text-[11px] mb-2.5">Pick one or more areas. The same stone is applied to all of them.</p>
                   {detecting ? (
                     <div className="text-muted text-xs py-2 animate-pulse">◍ Studying the room for floors, walls, counters and tables…</div>
                   ) : detected.length > 0 && !manualMode ? (
                     <div className="flex flex-col gap-1.5">
                       {detected.map((d) => {
-                        const active = target?.id === d.id;
+                        const on = isSel(d.id);
                         return (
                           <button
                             key={d.id}
                             onMouseEnter={() => setHoverId(d.id)}
                             onMouseLeave={() => setHoverId(null)}
-                            onClick={() => { setTarget(d); setManualMode(false); }}
-                            className={`flex items-center justify-between px-3 py-2 rounded-lg border text-left transition-colors ${active ? "bg-accent/15 border-accent" : "border-line hover:border-accent/60"}`}
+                            onClick={() => toggleArea(areaOfDetected(d))}
+                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors ${on ? "bg-accent/15 border-accent" : "border-line hover:border-accent/60"}`}
                           >
-                            <span className="text-sm">{d.label}</span>
-                            <span className={`text-[10px] uppercase tracking-wide ${active ? "text-accent" : "text-faint"}`}>
+                            <span className={`w-4 h-4 rounded grid place-items-center text-[10px] font-bold ${on ? "bg-accent text-[#1a1508]" : "border border-line text-transparent"}`}>✓</span>
+                            <span className="text-sm flex-1">{d.label}</span>
+                            <span className={`text-[10px] uppercase tracking-wide ${on ? "text-accent" : "text-faint"}`}>
                               {SURFACES.find((s) => s.id === d.surface)?.label}
                             </span>
                           </button>
@@ -315,17 +322,25 @@ export default function Workspace({
                   ) : (
                     <div>
                       {detectNote && <div className="text-faint text-[11px] mb-2">{detectNote}</div>}
-                      <div className="flex flex-wrap rounded-lg overflow-hidden border border-line w-fit">
-                        {SURFACES.map((s) => (
-                          <button key={s.id} onClick={() => { setSurface(s.id); setTarget(null); }}
-                            className={`px-2.5 py-1.5 text-xs ${!target && surface === s.id ? "bg-accent text-[#1a1508] font-semibold" : "text-muted"}`}>
-                            {s.label}
-                          </button>
-                        ))}
+                      <div className="flex flex-wrap gap-2">
+                        {SURFACES.map((s) => {
+                          const on = isSel(`m-${s.id}`);
+                          return (
+                            <button key={s.id} onClick={() => toggleArea(manualArea(s))}
+                              className={`px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${on ? "bg-accent text-[#1a1508] border-accent font-semibold" : "border-line text-muted hover:border-accent/60"}`}>
+                              {on ? "✓ " : ""}{s.label}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
-                  <div className="text-faint text-[11px] mt-3">Hover a surface to preview it on the room.</div>
+                  {selected.length > 0 && (
+                    <div className="text-[11px] text-muted mt-3">
+                      Selected: <span className="text-ink">{effectiveLabel}</span>
+                    </div>
+                  )}
+                  <div className="text-faint text-[11px] mt-1">Hover a surface to preview it on the room.</div>
                 </div>
               )}
 
@@ -389,12 +404,10 @@ export default function Workspace({
                     )}
                   </button>
                   <div className="p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{g.tile.name}</div>
-                        <div className="text-[11px] text-muted truncate">
-                          {[g.tile.size, g.tile.pricePerSqft ? `₹${g.tile.pricePerSqft}/sq ft` : null].filter(Boolean).join(" · ")}
-                        </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{g.tile.name}</div>
+                      <div className="text-[11px] text-muted truncate">
+                        {[g.tile.size, g.tile.pricePerSqft ? `₹${g.tile.pricePerSqft}/sq ft` : null].filter(Boolean).join(" · ")}
                       </div>
                     </div>
                     {g.status === "done" && (
@@ -417,11 +430,11 @@ export default function Workspace({
           {step === 1 ? <a href="/" className="btn !py-2 text-sm">← Customer</a> : <button className="btn !py-2 text-sm" onClick={() => setStep(step - 1)}>← Back</button>}
           <div className="text-xs text-muted hidden sm:block">
             {step === 1 && (scene ? "Room selected" : "Select a room to continue")}
-            {step === 2 && `Applying to ${effectiveLabel}`}
+            {step === 2 && (selected.length ? `Applying to ${effectiveLabel}` : "Pick at least one area")}
             {step === 3 && `${tiles.length} ${tiles.length === 1 ? "tile" : "tiles"} selected`}
           </div>
           {step === 1 && <button className="btn btn-gold !py-2 text-sm" disabled={!scene} onClick={() => setStep(2)}>Next: surface →</button>}
-          {step === 2 && <button className="btn btn-gold !py-2 text-sm" disabled={detecting} onClick={() => setStep(3)}>Next: tiles →</button>}
+          {step === 2 && <button className="btn btn-gold !py-2 text-sm" disabled={detecting || !selected.length} onClick={() => setStep(3)}>Next: tiles →</button>}
           {step === 3 && <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length || running} onClick={runBatch}>Generate {tiles.length || ""} {tiles.length === 1 ? "render" : "renders"} ✦</button>}
         </footer>
       )}

@@ -1,10 +1,9 @@
 "use client";
 import { useState } from "react";
 import { LIBRARY_STONES } from "@/lib/library";
-import { fileToDataUrl } from "@/lib/bookmatch";
 import { STONE_TYPES, FINISHES } from "@/lib/types";
 import type { StoneMeta } from "@/lib/types";
-import QrUpload from "./QrUpload";
+import UploadDialog from "./UploadDialog";
 
 export type PickedStone = StoneMeta & { imageUrl: string };
 
@@ -21,7 +20,7 @@ export default function TilePicker({
   value: PickedStone[];
   onChange: (s: PickedStone[]) => void;
 }) {
-  const [qr, setQr] = useState(false);
+  const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null); // image awaiting details
   const [form, setForm] = useState({ ...emptyForm });
 
@@ -31,14 +30,6 @@ export default function TilePicker({
     else onChange([...value, s]);
   };
   const uploads = value.filter((v) => v.source === "upload");
-
-  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setPending(await fileToDataUrl(f));
-    setForm({ ...emptyForm });
-    e.target.value = "";
-  }
 
   function saveDetails() {
     if (!pending) return;
@@ -86,13 +77,7 @@ export default function TilePicker({
         <h3 className="font-display text-base">
           Tiles {value.length > 0 && <span className="text-accent text-sm">· {value.length} selected</span>}
         </h3>
-        <div className="flex gap-2">
-          <label className="btn !py-1.5 !px-2.5 text-xs cursor-pointer">
-            Upload
-            <input type="file" accept="image/*" className="hidden" onChange={onUpload} />
-          </label>
-          <button className="btn !py-1.5 !px-2.5 text-xs" onClick={() => setQr(true)}>Scan ▦</button>
-        </div>
+        <button className="btn !py-1.5 !px-2.5 text-xs" onClick={() => setOpen(true)}>Upload</button>
       </div>
 
       <p className="text-muted text-xs mb-3">Pick as many as you want to compare. Each one is rendered into the room.</p>
@@ -138,12 +123,12 @@ export default function TilePicker({
         </div>
       )}
 
-      {qr && (
-        <QrUpload
+      {open && (
+        <UploadDialog
           projectId={projectId}
           kind="stone"
-          onImage={(url) => { setPending(url); setForm({ ...emptyForm }); setQr(false); }}
-          onClose={() => setQr(false)}
+          onImage={(url) => { setPending(url); setForm({ ...emptyForm }); setOpen(false); }}
+          onClose={() => setOpen(false)}
         />
       )}
     </div>

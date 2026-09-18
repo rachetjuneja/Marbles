@@ -9,13 +9,13 @@ import type { DetectedSurface } from "@/lib/types";
  */
 export default function SurfaceOverlay({
   surfaces,
-  activeId,
+  activeIds,
   hoverId,
   onPick,
   onHover,
 }: {
   surfaces: DetectedSurface[];
-  activeId: string | null;
+  activeIds: string[];
   hoverId: string | null;
   onPick: (s: DetectedSurface) => void;
   onHover: (id: string | null) => void;
@@ -24,7 +24,7 @@ export default function SurfaceOverlay({
     <div className="absolute inset-0 pointer-events-none">
       {surfaces.map((s) => {
         const [y0, x0, y1, x1] = s.box;
-        const active = s.id === activeId;
+        const active = activeIds.includes(s.id);
         const hover = s.id === hoverId;
         const style = {
           top: `${y0 * 100}%`,
@@ -43,7 +43,7 @@ export default function SurfaceOverlay({
             className={[
               "absolute rounded-md pointer-events-auto cursor-pointer transition-all group",
               active
-                ? "border-2 border-accent bg-accent/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] z-10"
+                ? "border-2 border-accent bg-accent/25 z-10"
                 : hover
                 ? "border-2 border-accent/80 bg-accent/10"
                 : "border border-dashed border-white/50 hover:border-accent/70",

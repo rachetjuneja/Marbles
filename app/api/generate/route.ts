@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runGenerate } from "@/lib/models";
-import { buildPrompt } from "@/lib/prompt";
+import { buildPrompt, type Target } from "@/lib/prompt";
 import { putImage, saveRender } from "@/lib/store";
 import type { StoneMeta, Surface } from "@/lib/types";
 import { randomUUID } from "crypto";
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       sceneRef,
       stoneRef,
       surface,
+      targets,
       model,
       bookmatch,
       stone,
@@ -25,18 +26,27 @@ export async function POST(req: NextRequest) {
       projectId: string;
       sceneRef: string;
       stoneRef: string;
-      surface: Surface;
+      surface?: Surface;
+      targets?: Target[];
       model: string;
       bookmatch: boolean;
       stone: StoneMeta;
       targetLabel?: string;
     } = body;
 
-    if (!sceneRef || !stoneRef || !surface || !model) {
-      return NextResponse.json({ error: "sceneRef, stoneRef, surface and model are required" }, { status: 400 });
+    // Prefer the multi-surface `targets` array; fall back to a single surface.
+    const targetList: Target[] =
+      Array.isArray(targets) && targets.length
+        ? targets
+        : surface
+        ? [{ surface, label: targetLabel }]
+        : [];
+
+    if (!sceneRef || !stoneRef || !targetList.length || !model) {
+      return NextResponse.json({ error: "sceneRef, stoneRef, at least one surface and model are required" }, { status: 400 });
     }
 
-    const prompt = buildPrompt(surface, Boolean(bookmatch), stone?.name, targetLabel);
+    const prompt = buildPrompt(targetList, Boolean(bookmatch), stone?.name);
     const out = await runGenerate({ modelId: model, prompt, sceneRef, stoneRef });
 
     // Persist the render image (Supabase storage, or a data URL in dev).
@@ -53,7 +63,7 @@ export async function POST(req: NextRequest) {
         projectId,
         sceneUrl: typeof sceneRef === "string" && sceneRef.startsWith("data:") ? resultUrl : sceneRef,
         resultUrl,
-        surface,
+        surface: targetList[0].surface,
         model,
         bookmatch: Boolean(bookmatch),
         stone: stone || { name: "Stone", source: "upload" },

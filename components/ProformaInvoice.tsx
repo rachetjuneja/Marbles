@@ -20,7 +20,7 @@ export default function ProformaInvoice({
   const rows = items.map((it) => {
     const qty = it.qty || 0;
     const rate = it.stone.pricePerSqft || 0;
-    return { name: it.stone.name, detail: [it.stone.stoneType, it.stone.finish, it.surface.replace("_", " ")].filter(Boolean).join(", "), qty, rate, amount: qty * rate };
+    return { name: it.stone.name, detail: [it.stone.stoneType, it.stone.finish, it.areaLabel || it.surface.replace("_", " ")].filter(Boolean).join(", "), qty, rate, amount: qty * rate };
   });
   const subtotal = rows.reduce((s, r) => s + r.amount, 0);
   const cgst = subtotal * 0.09;

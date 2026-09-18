@@ -43,7 +43,7 @@ export default function CartDrawer({
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-medium truncate">{it.stone.name}</div>
                     <div className="text-[11px] text-muted truncate">
-                      {[it.surface.replace("_", " "), it.stone.finish, `₹${it.stone.pricePerSqft || "?"}/sq ft`].filter(Boolean).join(" · ")}
+                      {[it.areaLabel || it.surface.replace("_", " "), it.stone.finish, `₹${it.stone.pricePerSqft || "?"}/sq ft`].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                   <button className="text-faint hover:text-danger text-base px-1" onClick={() => onRemove(it.key)}>✕</button>
