@@ -1,14 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ScenePicker from "./ScenePicker";
 import StonePicker, { PickedStone } from "./StonePicker";
 import ModelSelect, { PublicModel } from "./ModelSelect";
 import WishlistDrawer from "./WishlistDrawer";
 import CartDrawer from "./CartDrawer";
 import ProformaInvoice from "./ProformaInvoice";
+import SurfaceOverlay from "./SurfaceOverlay";
 import { makeBookmatch } from "@/lib/bookmatch";
+import { detectSurfaces } from "@/lib/detect";
 import { SURFACES, SURFACE_AREA } from "@/lib/types";
-import type { SceneRef, Surface, SavedRender } from "@/lib/types";
+import type { SceneRef, Surface, SavedRender, DetectedSurface } from "@/lib/types";
 
 export default function Workspace({
   projectId,
@@ -32,12 +34,98 @@ export default function Workspace({
   const [result, setResult] = useState<string | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
 
+  // Surface detection
+  const [detected, setDetected] = useState<DetectedSurface[]>([]);
+  const [detecting, setDetecting] = useState(false);
+  const [detectNote, setDetectNote] = useState<string | null>(null);
+  const [target, setTarget] = useState<DetectedSurface | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [manualMode, setManualMode] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(true);
+  const cacheRef = useRef<Record<string, DetectedSurface[]>>({});
+  const reqRef = useRef(0);
+
+  // Measure where the (object-contain) image actually renders inside the stage,
+  // so the detected-surface overlay lines up exactly, whatever the photo's aspect.
+  const stageRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [rect, setRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+  function measure() {
+    const c = stageRef.current, im = imgRef.current;
+    if (!c || !im || !im.naturalWidth || !im.naturalHeight) { setRect(null); return; }
+    const cw = c.clientWidth, ch = c.clientHeight;
+    const scale = Math.min(cw / im.naturalWidth, ch / im.naturalHeight);
+    const w = im.naturalWidth * scale, h = im.naturalHeight * scale;
+    setRect({ left: (cw - w) / 2, top: (ch - h) / 2, width: w, height: h });
+  }
+
   const [wishlist, setWishlist] = useState<SavedRender[]>([]);
   const [cart, setCart] = useState<SavedRender[]>([]);
   const [panel, setPanel] = useState<"wishlist" | "cart" | null>(null);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
 
+  // What we actually apply to: the detected target if one is chosen, else the manual pick.
+  const effectiveSurface: Surface = target ? target.surface : surface;
+  const effectiveLabel = target ? target.label : SURFACES.find((s) => s.id === surface)?.label || "surface";
+
   const stageImg = result && !showOriginal ? result : scene?.imageUrl || null;
+  const onBaseScene = !!scene && (!result || showOriginal);
+  const overlayVisible = showOverlay && onBaseScene && detected.length > 0;
+
+  // Run automatic surface detection whenever the room changes.
+  useEffect(() => {
+    setTarget(null);
+    setResult(null);
+    setErr(null);
+    setManualMode(false);
+    if (!scene) {
+      setDetected([]);
+      setDetectNote(null);
+      return;
+    }
+    const url = scene.imageUrl;
+    const cached = cacheRef.current[url];
+    if (cached) {
+      setDetected(cached);
+      setTarget(cached[0] || null);
+      setDetectNote(cached.length ? null : "No surfaces detected. Pick one manually.");
+      return;
+    }
+    const id = ++reqRef.current;
+    setDetecting(true);
+    setDetected([]);
+    setDetectNote(null);
+    detectSurfaces(url)
+      .then(({ surfaces, error }) => {
+        if (id !== reqRef.current) return;
+        cacheRef.current[url] = surfaces;
+        setDetected(surfaces);
+        setTarget(surfaces[0] || null);
+        if (!surfaces.length) {
+          setDetectNote(
+            error && /GEMINI_API_KEY/.test(error)
+              ? "Add the Gemini key to auto detect surfaces. Pick one manually for now."
+              : "No surfaces detected automatically. Pick one manually."
+          );
+          setManualMode(true);
+        }
+      })
+      .finally(() => {
+        if (id === reqRef.current) setDetecting(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene?.imageUrl]);
+
+  // Keep the overlay aligned as the image loads or the stage resizes.
+  useEffect(() => {
+    measure();
+    const c = stageRef.current;
+    if (!c || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(c);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stageImg]);
 
   async function generate() {
     if (!scene || !stone) { setErr("Pick a room and a stone first."); return; }
@@ -49,7 +137,9 @@ export default function Workspace({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          projectId, sceneRef: scene.imageUrl, stoneRef, surface, model, bookmatch,
+          projectId, sceneRef: scene.imageUrl, stoneRef,
+          surface: effectiveSurface, targetLabel: target?.label,
+          model, bookmatch,
           stone: {
             name: stone.name, stoneType: stone.stoneType, origin: stone.origin, size: stone.size,
             thicknessMm: stone.thicknessMm, finish: stone.finish, pricePerSqft: stone.pricePerSqft, source: stone.source,
@@ -68,7 +158,7 @@ export default function Workspace({
 
   function currentSaved(): SavedRender | null {
     if (!result || !stone) return null;
-    return { key: result, resultUrl: result, surface, stone };
+    return { key: result, resultUrl: result, surface: effectiveSurface, stone };
   }
   function addWishlist() {
     const it = currentSaved(); if (!it) return;
@@ -78,7 +168,7 @@ export default function Workspace({
   function addCart() {
     const it = currentSaved(); if (!it) return;
     if (cart.some((c) => c.key === it.key)) return setPanel("cart");
-    setCart((l) => [{ ...it, qty: SURFACE_AREA[surface] }, ...l]); setPanel("cart");
+    setCart((l) => [{ ...it, qty: SURFACE_AREA[effectiveSurface] }, ...l]); setPanel("cart");
   }
 
   return (
@@ -106,12 +196,43 @@ export default function Workspace({
       <div className="grid lg:grid-cols-[1fr_360px] gap-5 p-5">
         {/* Stage + controls */}
         <div className="min-w-0">
-          <div className="relative rounded-2xl overflow-hidden border border-line bg-black aspect-[16/10]">
+          <div ref={stageRef} className="relative rounded-2xl overflow-hidden border border-line bg-black aspect-[16/10]">
             {stageImg ? (
-              <img src={stageImg} alt="" className="w-full h-full object-cover" />
+              <img ref={imgRef} src={stageImg} alt="" onLoad={measure} className="absolute inset-0 w-full h-full object-contain" />
             ) : (
               <div className="w-full h-full grid place-items-center text-muted text-sm">Pick a room to begin</div>
             )}
+            {overlayVisible && rect && (
+              <div className="absolute" style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}>
+                <SurfaceOverlay
+                  surfaces={detected}
+                  activeId={target?.id ?? null}
+                  hoverId={hoverId}
+                  onPick={(s) => { setTarget(s); setManualMode(false); }}
+                  onHover={setHoverId}
+                />
+              </div>
+            )}
+
+            {onBaseScene && (target || (!detected.length && !detecting)) && (
+              <div className="absolute left-3 top-3 text-[11px] px-2 py-1 rounded-md bg-black/70 border border-line text-ink pointer-events-none">
+                Applying to <span className="text-accent font-medium">{effectiveLabel}</span>
+              </div>
+            )}
+            {detecting && (
+              <div className="absolute left-3 top-3 text-[11px] px-2 py-1 rounded-md bg-black/70 border border-line text-muted pointer-events-none animate-pulse">
+                ◍ Analysing room…
+              </div>
+            )}
+            {detected.length > 0 && onBaseScene && (
+              <button
+                className="absolute left-3 bottom-3 btn !py-1 !px-2 text-[11px]"
+                onClick={() => setShowOverlay((v) => !v)}
+              >
+                {showOverlay ? "Hide surfaces" : "Show surfaces"}
+              </button>
+            )}
+
             {busy && (
               <div className="absolute inset-0 bg-black/55 grid place-items-center">
                 <div className="text-center">
@@ -132,18 +253,56 @@ export default function Workspace({
             )}
           </div>
 
-          <div className="card mt-3.5 p-3.5 flex flex-wrap gap-x-4 gap-y-3 items-end">
-            <div>
-              <span className="label">Apply to</span>
-              <div className="inline-flex rounded-lg overflow-hidden border border-line">
-                {SURFACES.map((s) => (
-                  <button key={s.id} onClick={() => setSurface(s.id)}
-                    className={`px-2.5 py-1.5 text-xs ${surface === s.id ? "bg-accent text-[#1a1508] font-semibold" : "text-muted"}`}>
-                    {s.label}
-                  </button>
-                ))}
-              </div>
+          {/* Where to apply */}
+          <div className="card mt-3.5 p-3.5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="label !mb-0">Where to apply</span>
+              {detected.length > 0 && (
+                <button
+                  className="text-[11px] text-muted hover:text-ink"
+                  onClick={() => setManualMode((v) => !v)}
+                >
+                  {manualMode ? "Use detected surfaces" : "Set manually"}
+                </button>
+              )}
             </div>
+
+            {detecting ? (
+              <div className="text-muted text-xs py-1 animate-pulse">◍ Studying the room for floors, walls, counters and tables…</div>
+            ) : detected.length > 0 && !manualMode ? (
+              <div className="flex flex-wrap gap-2">
+                {detected.map((d) => {
+                  const active = target?.id === d.id;
+                  return (
+                    <button
+                      key={d.id}
+                      onMouseEnter={() => setHoverId(d.id)}
+                      onMouseLeave={() => setHoverId(null)}
+                      onClick={() => { setTarget(d); setManualMode(false); }}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${active ? "bg-accent text-[#1a1508] border-accent font-semibold" : "border-line text-muted hover:border-accent/60 hover:text-ink"}`}
+                    >
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div>
+                {detectNote && <div className="text-faint text-[11px] mb-2">{detectNote}</div>}
+                <div className="inline-flex flex-wrap rounded-lg overflow-hidden border border-line">
+                  {SURFACES.map((s) => (
+                    <button key={s.id} onClick={() => { setSurface(s.id); setTarget(null); }}
+                      className={`px-2.5 py-1.5 text-xs ${!target && surface === s.id ? "bg-accent text-[#1a1508] font-semibold" : "text-muted"}`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Generate controls */}
+          <div className="card mt-3 p-3.5 flex flex-wrap gap-x-4 gap-y-3 items-end">
             <div>
               <span className="label">Book match</span>
               <button onClick={() => setBookmatch((b) => !b)}
@@ -153,9 +312,16 @@ export default function Workspace({
             </div>
             <div className="min-w-[180px]"><ModelSelect models={models} value={model} onChange={setModel} /></div>
             <div className="flex-1" />
-            <button className="btn btn-gold" disabled={busy || !scene || !stone} onClick={generate}>
-              {busy ? "Rendering…" : "Generate ✦"}
-            </button>
+            <div className="text-right">
+              {stone && (
+                <div className="text-[11px] text-muted mb-1">
+                  Applying <span className="text-ink">{stone.name}</span> to <span className="text-accent">{effectiveLabel}</span>
+                </div>
+              )}
+              <button className="btn btn-gold" disabled={busy || !scene || !stone} onClick={generate}>
+                {busy ? "Rendering…" : "Generate ✦"}
+              </button>
+            </div>
           </div>
           {err && <div className="text-danger text-sm mt-2">{err}</div>}
           {result && !busy && (

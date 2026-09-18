@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       model,
       bookmatch,
       stone,
+      targetLabel,
     }: {
       projectId: string;
       sceneRef: string;
@@ -28,13 +29,14 @@ export async function POST(req: NextRequest) {
       model: string;
       bookmatch: boolean;
       stone: StoneMeta;
+      targetLabel?: string;
     } = body;
 
     if (!sceneRef || !stoneRef || !surface || !model) {
       return NextResponse.json({ error: "sceneRef, stoneRef, surface and model are required" }, { status: 400 });
     }
 
-    const prompt = buildPrompt(surface, Boolean(bookmatch), stone?.name);
+    const prompt = buildPrompt(surface, Boolean(bookmatch), stone?.name, targetLabel);
     const out = await runGenerate({ modelId: model, prompt, sceneRef, stoneRef });
 
     // Persist the render image (Supabase storage, or a data URL in dev).

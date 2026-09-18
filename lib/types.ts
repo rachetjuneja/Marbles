@@ -3,7 +3,8 @@ export type Surface =
   | "all_walls"
   | "floor"
   | "countertops"
-  | "staircase";
+  | "staircase"
+  | "table";
 
 export const SURFACES: { id: Surface; label: string }[] = [
   { id: "single_wall", label: "Single Wall" },
@@ -11,6 +12,7 @@ export const SURFACES: { id: Surface; label: string }[] = [
   { id: "floor", label: "Floor" },
   { id: "countertops", label: "Countertops" },
   { id: "staircase", label: "Staircase" },
+  { id: "table", label: "Table" },
 ];
 
 export interface StoneMeta {
@@ -35,7 +37,24 @@ export const SURFACE_AREA: Record<Surface, number> = {
   floor: 140,
   countertops: 28,
   staircase: 60,
+  table: 18,
 };
+
+// Raw detection as returned by the vision model (box in 0..1000, model's own labels).
+export interface RawDetection {
+  label: string;
+  category: string;
+  box_2d: [number, number, number, number]; // ymin, xmin, ymax, xmax on a 0..1000 scale
+}
+
+// A surface the vision model found in the room where stone can be applied.
+export interface DetectedSurface {
+  id: string;
+  label: string; // human name, e.g. "Floor", "Left wall", "Kitchen countertop"
+  category: string; // raw category from the model
+  surface: Surface; // mapped canonical surface (drives area + prompt phrasing)
+  box: [number, number, number, number]; // y0, x0, y1, x1 normalised 0..1
+}
 
 export interface SavedRender {
   key: string;

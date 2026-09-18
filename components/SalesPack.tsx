@@ -13,6 +13,7 @@ const AREA: Record<Surface, number> = {
   floor: 140,
   countertops: 28,
   staircase: 60,
+  table: 18,
 };
 
 export default function SalesPack({
