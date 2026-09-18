@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
       bookmatch,
       stone,
       targetLabel,
+      scaleNote,
     }: {
       projectId: string;
       sceneRef: string;
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
       bookmatch: boolean;
       stone: StoneMeta;
       targetLabel?: string;
+      scaleNote?: string;
     } = body;
 
     // Prefer the multi-surface `targets` array; fall back to a single surface.
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "sceneRef, stoneRef, at least one surface and model are required" }, { status: 400 });
     }
 
-    const prompt = buildPrompt(targetList, Boolean(bookmatch), stone?.name);
+    const prompt = buildPrompt(targetList, stone?.name, scaleNote);
     const out = await runGenerate({ modelId: model, prompt, sceneRef, stoneRef });
 
     // Persist the render image (Supabase storage, or a data URL in dev).

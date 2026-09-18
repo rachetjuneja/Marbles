@@ -7,10 +7,12 @@ import WishlistDrawer from "./WishlistDrawer";
 import CartDrawer from "./CartDrawer";
 import ProformaInvoice from "./ProformaInvoice";
 import SurfaceOverlay from "./SurfaceOverlay";
-import { makeBookmatch } from "@/lib/bookmatch";
+import BookmatchStudio from "./BookmatchStudio";
+import { buildBookmatch } from "@/lib/bookmatch";
 import { detectSurfaces } from "@/lib/detect";
+import { suggestPattern, layoutInstruction, parseSlab } from "@/lib/bookmatch-calc";
 import { SURFACES, SURFACE_AREA } from "@/lib/types";
-import type { SceneRef, Surface, SavedRender, DetectedSurface } from "@/lib/types";
+import type { SceneRef, Surface, SavedRender, DetectedSurface, BookmatchOptions } from "@/lib/types";
 
 type Gen = { id: string; tile: PickedStone; url: string | null; status: "pending" | "done" | "error"; error?: string };
 type Area = { id: string; label: string; surface: Surface; promptLabel?: string };
@@ -47,6 +49,8 @@ export default function Workspace({
   // Tiles + batch
   const [tiles, setTiles] = useState<PickedStone[]>([]);
   const [bookmatch, setBookmatch] = useState(true);
+  const [bm, setBm] = useState<BookmatchOptions>({ pattern: "book", direction: "vertical", rotation: 0 });
+  const [bmTouched, setBmTouched] = useState(false);
   const [model, setModel] = useState<string>(firstAvail);
   const [gens, setGens] = useState<Gen[]>([]);
   const [running, setRunning] = useState(false);
@@ -126,6 +130,15 @@ export default function Workspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene?.imageUrl, step]);
 
+  // Default the book-match pattern to the best fit for the chosen surface,
+  // until the rep changes it themselves.
+  useEffect(() => {
+    if (bmTouched) return;
+    const s = selected[0]?.surface;
+    if (s) setBm((o) => ({ ...o, pattern: suggestPattern(s) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, bmTouched]);
+
   async function pool<T>(items: T[], n: number, fn: (t: T, i: number) => Promise<void>) {
     let idx = 0;
     const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
@@ -144,12 +157,13 @@ export default function Workspace({
     await pool(items, 3, async (g, i) => {
       try {
         let stoneRef = g.tile.imageUrl;
-        if (bookmatch) { try { stoneRef = await makeBookmatch(g.tile.imageUrl); } catch { /* keep original */ } }
+        if (bookmatch) { try { stoneRef = await buildBookmatch(g.tile.imageUrl, bm); } catch { /* keep original */ } }
+        const scaleNote = layoutInstruction({ slab: parseSlab(g.tile.size), pattern: bm.pattern, direction: bm.direction, areaSqft: effectiveArea, bookmatch });
         const res = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            projectId, sceneRef: scene.imageUrl, stoneRef, targets, model, bookmatch,
+            projectId, sceneRef: scene.imageUrl, stoneRef, targets, model, bookmatch, scaleNote,
             stone: {
               name: g.tile.name, stoneType: g.tile.stoneType, origin: g.tile.origin, size: g.tile.size,
               thicknessMm: g.tile.thicknessMm, finish: g.tile.finish, pricePerSqft: g.tile.pricePerSqft, source: g.tile.source,
@@ -359,6 +373,15 @@ export default function Workspace({
                     <ModelSelect models={models} value={model} onChange={setModel} />
                     {!modelAvailable && <div className="text-danger text-[11px] mt-2">This model has no API key set. Add it to .env.local to generate.</div>}
                   </div>
+                  {bookmatch && (
+                    <BookmatchStudio
+                      tile={tiles[0] || null}
+                      options={bm}
+                      onChange={(o) => { setBm(o); setBmTouched(true); }}
+                      areaSqft={effectiveArea}
+                      suggestion={selected[0] ? suggestPattern(selected[0].surface) : undefined}
+                    />
+                  )}
                 </>
               )}
             </div>

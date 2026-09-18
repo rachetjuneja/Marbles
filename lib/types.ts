@@ -30,6 +30,15 @@ export interface StoneMeta {
 export const STONE_TYPES = ["Marble", "Granite", "Quartzite", "Onyx", "Quartz"];
 export const FINISHES = ["Polished", "Honed", "Leather", "Brushed"];
 
+// Book-match layout for a slab.
+export type BookmatchPattern = "book" | "four_way" | "diamond" | "slip";
+
+export interface BookmatchOptions {
+  pattern: BookmatchPattern;
+  direction: "vertical" | "horizontal"; // mirror seam orientation (mainly for Book)
+  rotation: 0 | 90 | 180 | 270; // base slab rotation
+}
+
 // Indicative area per surface (sq ft), used as the default quantity in the cart.
 export const SURFACE_AREA: Record<Surface, number> = {
   single_wall: 96,
