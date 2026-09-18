@@ -1,0 +1,21 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { height: 100%; }
+body { background: #0c0c0e; color: #eceae4; }
+
+/* thin scrollbars */
+::-webkit-scrollbar { height: 9px; width: 9px; }
+::-webkit-scrollbar-thumb { background: #2b2b31; border-radius: 8px; }
+
+.card { background: #151517; border: 1px solid #2a2a31; border-radius: 14px; }
+.btn { display:inline-flex; align-items:center; gap:8px; background:#1b1b1f; color:#eceae4;
+  border:1px solid #2a2a31; border-radius:10px; padding:9px 14px; font-size:13px; font-weight:500; cursor:pointer; }
+.btn:hover { border-color:#c9a25e; }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+.btn-gold { background:#c9a25e; color:#1a1508; border-color:#c9a25e; font-weight:600; }
+.input { background:#1b1b1f; color:#eceae4; border:1px solid #2a2a31; border-radius:10px; padding:10px 12px; font-size:14px; width:100%; }
+.input:focus { outline:none; border-color:#c9a25e; }
+.label { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:#98958c; margin-bottom:6px; display:block; }
