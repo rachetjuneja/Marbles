@@ -13,10 +13,14 @@ export default function ModelSelect({
   models,
   value,
   onChange,
+  dropUp = false,
+  hideLabel = false,
 }: {
   models: PublicModel[];
   value: string;
   onChange: (id: string) => void;
+  dropUp?: boolean;
+  hideLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -32,13 +36,13 @@ export default function ModelSelect({
 
   return (
     <div className="relative" ref={ref}>
-      <label className="label">Model</label>
+      {!hideLabel && <label className="label">Model</label>}
       <button type="button" className="btn w-full justify-between" onClick={() => setOpen((o) => !o)}>
-        <span>{cur?.label}</span>
-        <span className="text-muted text-xs">{cur?.approxCost} ▾</span>
+        <span className="truncate">{cur?.label}</span>
+        <span className="text-muted text-xs whitespace-nowrap">{cur?.approxCost} ▾</span>
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 w-[300px] card p-1.5 shadow-2xl">
+        <div className={`absolute z-30 right-0 w-[300px] card p-1.5 shadow-2xl ${dropUp ? "bottom-full mb-1" : "mt-1"}`}>
           {models.map((m) => (
             <button
               key={m.id}
