@@ -187,29 +187,35 @@ export default function TilePicker({
       <p className="text-muted text-xs mb-4">Pick as many marbles as you want to compare. Each one is rendered into the room.</p>
 
       {/* Inventory toolbar */}
-      <div className="flex flex-wrap items-center gap-2 mb-5">
-        <div className="relative flex-1 min-w-[180px]">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-faint text-xs">⌕</span>
-          <input className="input !py-1.5 !pl-7 text-xs w-full" placeholder="Search by name, type, origin or lot" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="mb-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px]">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-faint text-sm pointer-events-none">⌕</span>
+            <input className="input !py-2 !pl-9 !pr-8 text-sm" placeholder="Search marbles by name, type, origin or lot" value={q} onChange={(e) => setQ(e.target.value)} />
+            {q && <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-faint hover:text-ink text-sm" onClick={() => setQ("")}>✕</button>}
+          </div>
+          <select className="input !w-[124px] !py-2 text-xs" value={typeF} onChange={(e) => setTypeF(e.target.value)}>
+            <option value="">All types</option>
+            {STONE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select className="input !w-[132px] !py-2 text-xs" value={finishF} onChange={(e) => setFinishF(e.target.value)}>
+            <option value="">All finishes</option>
+            {FINISHES.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+          <select className="input !w-[152px] !py-2 text-xs" value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="featured">Sort: Featured</option>
+            <option value="price-asc">Price: low to high</option>
+            <option value="price-desc">Price: high to low</option>
+            <option value="stock">Most in stock</option>
+            <option value="name">Name A to Z</option>
+          </select>
         </div>
-        <select className="input !py-1.5 text-xs" value={typeF} onChange={(e) => setTypeF(e.target.value)}>
-          <option value="">All types</option>
-          {STONE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select className="input !py-1.5 text-xs" value={finishF} onChange={(e) => setFinishF(e.target.value)}>
-          <option value="">All finishes</option>
-          {FINISHES.map((f) => <option key={f} value={f}>{f}</option>)}
-        </select>
-        <select className="input !py-1.5 text-xs" value={sort} onChange={(e) => setSort(e.target.value)}>
-          <option value="featured">Featured</option>
-          <option value="price-asc">Price: low to high</option>
-          <option value="price-desc">Price: high to low</option>
-          <option value="stock">Most in stock</option>
-          <option value="name">Name A to Z</option>
-        </select>
-        {activeFilters && (
-          <button className="text-[11px] text-muted hover:text-ink" onClick={() => { setQ(""); setTypeF(""); setFinishF(""); setSort("featured"); }}>Clear</button>
-        )}
+        <div className="flex items-center justify-between mt-2.5 px-0.5">
+          <span className="text-[11px] text-muted">Showing {shown.length} of {all.length} {all.length === 1 ? "marble" : "marbles"}</span>
+          {activeFilters && (
+            <button className="text-[11px] text-accent hover:underline" onClick={() => { setQ(""); setTypeF(""); setFinishF(""); setSort("featured"); }}>Clear filters ✕</button>
+          )}
+        </div>
       </div>
 
       {shown.length === 0 ? (
