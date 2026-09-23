@@ -48,6 +48,11 @@ export function unitDims(slab: { w: number; h: number }, pattern: BookmatchPatte
   }
 }
 
+/** Area a single slab covers, in square feet. */
+export function slabAreaSqft(slab: { w: number; h: number }): number {
+  return (slab.w / 1000) * (slab.h / 1000) * 10.7639;
+}
+
 /** How many slabs cover a surface, with a wastage allowance. */
 export function slabsForArea(areaSqft: number, slab: { w: number; h: number }, wastage = 0.15): number {
   const slabSqft = (slab.w / 1000) * (slab.h / 1000) * 10.7639;

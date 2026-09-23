@@ -24,6 +24,8 @@ export interface StoneMeta {
   thicknessMm?: number; // slab thickness in mm
   finish?: string; // Polished / Honed / Leather / Brushed
   pricePerSqft?: number;
+  slabsInStock?: number; // inventory: number of slabs available
+  lotNo?: string; // lot or block number
   source: "library" | "upload";
 }
 
