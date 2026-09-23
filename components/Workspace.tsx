@@ -17,8 +17,8 @@ import type { SceneRef, Surface, SavedRender, DetectedSurface, BookmatchOptions 
 type Gen = { id: string; tile: PickedStone; url: string | null; status: "pending" | "done" | "error"; error?: string };
 type Area = { id: string; label: string; surface: Surface; promptLabel?: string };
 
-// The journey: Customer (done on the entry screen), then these four.
-const STEP_LABELS = ["Customer", "Tiles", "Room", "Surface", "Result"];
+// The journey: Customer (done on the entry screen), then these five.
+const STEP_LABELS = ["Customer", "Tiles", "Room", "Surface", "Book match", "Result"];
 
 export default function Workspace({
   projectId,
@@ -33,7 +33,7 @@ export default function Workspace({
 }) {
   const firstAvail = models.find((m) => m.available)?.id || models[0]?.id;
 
-  const [step, setStep] = useState(1); // 1 Tiles, 2 Room, 3 Surface, 4 Result
+  const [step, setStep] = useState(1); // 1 Tiles, 2 Room, 3 Surface, 4 Book match, 5 Result
   const [scene, setScene] = useState<SceneRef | null>(null);
 
   // Detection + surface selection (multiple areas allowed)
@@ -153,7 +153,7 @@ export default function Workspace({
     const items: Gen[] = tiles.map((t, i) => ({ id: `${i}-${t.imageUrl.slice(-10)}`, tile: t, url: null, status: "pending" }));
     setGens(items);
     setRunning(true);
-    setStep(4);
+    setStep(5);
     await pool(items, 3, async (g, i) => {
       try {
         let stoneRef = g.tile.imageUrl;
@@ -199,7 +199,8 @@ export default function Workspace({
     if (t >= 1 && t <= step) { setStep(t); return; }
     if (t === 2 && tiles.length) setStep(2);
     else if (t === 3 && tiles.length && scene && !detecting) setStep(3);
-    else if (t === 4 && gens.length) setStep(4);
+    else if (t === 4 && tiles.length && scene && selected.length) setStep(4);
+    else if (t === 5 && gens.length) setStep(5);
   }
 
   const doneCount = gens.filter((g) => g.status !== "pending").length;
@@ -241,7 +242,7 @@ export default function Workspace({
     </div>
   );
 
-  // Book match toggle + live studio, shared by the Tiles step and the Surface step.
+  // Book match toggle + live studio (used on the dedicated Book match step).
   const bookmatchPanel = (
     <>
       <div className="card p-4">
@@ -313,9 +314,8 @@ export default function Workspace({
       {/* Body */}
       <div className="flex-1 p-5">
         {step === 1 && (
-          <div className="grid lg:grid-cols-[1fr_360px] gap-5">
-            <div className="min-w-0"><TilePicker projectId={projectId} value={tiles} onChange={setTiles} /></div>
-            <div className="flex flex-col gap-4">{bookmatchPanel}</div>
+          <div className="max-w-6xl mx-auto">
+            <TilePicker projectId={projectId} value={tiles} onChange={setTiles} />
           </div>
         )}
 
@@ -325,7 +325,7 @@ export default function Workspace({
               {stage}
               <div className="text-muted text-xs mt-2">
                 {step === 2 && "Choose a room from the library, or scan the QR to let the customer send a photo from their phone."}
-                {step === 3 && (selected.length ? `Marble will be applied to ${effectiveLabel}. Set the layout on the right, then generate.` : "Tick the areas the marble should cover.")}
+                {step === 3 && (selected.length ? `Marble will be applied to ${effectiveLabel}. Next, set the book match layout.` : "Tick the areas the marble should cover.")}
               </div>
             </div>
 
@@ -383,7 +383,6 @@ export default function Workspace({
                     )}
                     <div className="text-faint text-[11px] mt-3">Hover a surface to preview it on the room.</div>
                   </div>
-                  {bookmatchPanel}
                 </>
               )}
             </div>
@@ -391,6 +390,16 @@ export default function Workspace({
         )}
 
         {step === 4 && (
+          <div className="max-w-2xl mx-auto flex flex-col gap-4">
+            <div>
+              <h2 className="font-display text-xl">Book match</h2>
+              <div className="text-muted text-xs mt-0.5">Set how the slabs are laid out for {effectiveLabel}. This exact layout is what gets rendered.</div>
+            </div>
+            {bookmatchPanel}
+          </div>
+        )}
+
+        {step === 5 && (
           <div>
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <div>
@@ -401,7 +410,7 @@ export default function Workspace({
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="btn !py-1.5 text-xs" onClick={() => setStep(3)}>← Adjust</button>
+                <button className="btn !py-1.5 text-xs" onClick={() => setStep(4)}>← Adjust</button>
                 <button className="btn btn-gold !py-1.5 text-xs" disabled={running} onClick={runBatch}>{running ? "Rendering…" : "Regenerate"}</button>
               </div>
             </div>
@@ -441,17 +450,19 @@ export default function Workspace({
       </div>
 
       {/* Footer nav */}
-      {step <= 3 && (
+      {step <= 4 && (
         <footer className="sticky bottom-0 bg-[#0f0f11] border-t border-line px-5 py-3 flex items-center justify-between gap-3">
           {step === 1 ? <a href="/" className="btn !py-2 text-sm">← Customer</a> : <button className="btn !py-2 text-sm" onClick={() => setStep(step - 1)}>← Back</button>}
           <div className="text-xs text-muted hidden sm:block flex-1 px-2">
             {step === 1 && (tiles.length ? `${tiles.length} ${tiles.length === 1 ? "tile" : "tiles"} selected` : "Select at least one tile")}
             {step === 2 && (scene ? "Room selected" : "Select a room to continue")}
             {step === 3 && (selected.length ? `Applying to ${effectiveLabel}` : "Pick at least one area")}
+            {step === 4 && (bookmatch ? "Book match on" : "Book match off, full slabs")}
           </div>
           {step === 1 && <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length} onClick={() => setStep(2)}>Next: room →</button>}
           {step === 2 && <button className="btn btn-gold !py-2 text-sm" disabled={!scene} onClick={() => setStep(3)}>Next: surface →</button>}
-          {step === 3 && (
+          {step === 3 && <button className="btn btn-gold !py-2 text-sm" disabled={!selected.length} onClick={() => setStep(4)}>Next: book match →</button>}
+          {step === 4 && (
             <div className="flex items-end gap-2.5">
               <div className="w-[200px] hidden sm:block"><ModelSelect models={models} value={model} onChange={setModel} dropUp hideLabel /></div>
               <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length || !selected.length || running} onClick={runBatch}>Generate {tiles.length || ""} {tiles.length === 1 ? "render" : "renders"} ✦</button>
