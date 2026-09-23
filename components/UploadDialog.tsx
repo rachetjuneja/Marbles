@@ -88,9 +88,12 @@ export default function UploadDialog({
               <div>
                 <div className="text-3xl mb-2 text-accent">⬆</div>
                 <div className="text-sm font-medium">Drop a file here</div>
-                <div className="text-muted text-xs mt-1">or click to select a file</div>
+                <div className="text-muted text-xs mt-1">or use the button below</div>
               </div>
             </div>
+            <button type="button" className="btn btn-gold w-full justify-center mt-3 text-sm" onClick={() => fileRef.current?.click()}>
+              Choose from files or library
+            </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
             {err && <div className="text-danger text-[11px] mt-2">{err}</div>}
           </div>
