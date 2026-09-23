@@ -139,6 +139,20 @@ export default function Workspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, bmTouched]);
 
+  // Sync the wizard step with browser history so the Back button (in-app or the
+  // browser's own) moves one step at a time instead of jumping to the home page.
+  const navigate = (to: number) => {
+    if (to === step) return;
+    try { window.history.pushState({ step: to }, ""); } catch { /* ignore */ }
+    setStep(to);
+  };
+  useEffect(() => {
+    try { window.history.replaceState({ step: 1 }, ""); } catch { /* ignore */ }
+    const onPop = (e: PopStateEvent) => setStep(typeof e.state?.step === "number" ? e.state.step : 1);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   async function pool<T>(items: T[], n: number, fn: (t: T, i: number) => Promise<void>) {
     let idx = 0;
     const workers = Array.from({ length: Math.min(n, items.length) }, async () => {
@@ -153,7 +167,7 @@ export default function Workspace({
     const items: Gen[] = tiles.map((t, i) => ({ id: `${i}-${t.imageUrl.slice(-10)}`, tile: t, url: null, status: "pending" }));
     setGens(items);
     setRunning(true);
-    setStep(5);
+    navigate(5);
     await pool(items, 3, async (g, i) => {
       try {
         let stoneRef = g.tile.imageUrl;
@@ -196,11 +210,11 @@ export default function Workspace({
   }
 
   function goStep(t: number) {
-    if (t >= 1 && t <= step) { setStep(t); return; }
-    if (t === 2 && tiles.length) setStep(2);
-    else if (t === 3 && tiles.length) setStep(3);
-    else if (t === 4 && tiles.length && scene && !detecting) setStep(4);
-    else if (t === 5 && gens.length) setStep(5);
+    if (t >= 1 && t <= step) { navigate(t); return; }
+    if (t === 2 && tiles.length) navigate(2);
+    else if (t === 3 && tiles.length) navigate(3);
+    else if (t === 4 && tiles.length && scene && !detecting) navigate(4);
+    else if (t === 5 && gens.length) navigate(5);
   }
 
   const doneCount = gens.filter((g) => g.status !== "pending").length;
@@ -410,7 +424,7 @@ export default function Workspace({
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="btn !py-1.5 text-xs" onClick={() => setStep(4)}>← Adjust</button>
+                <button className="btn !py-1.5 text-xs" onClick={() => window.history.back()}>← Adjust</button>
                 <button className="btn btn-gold !py-1.5 text-xs" disabled={running} onClick={runBatch}>{running ? "Rendering…" : "Regenerate"}</button>
               </div>
             </div>
@@ -452,16 +466,16 @@ export default function Workspace({
       {/* Footer nav */}
       {step <= 4 && (
         <footer className="sticky bottom-0 bg-[#0f0f11] border-t border-line px-5 py-3 flex items-center justify-between gap-3">
-          {step === 1 ? <a href="/" className="btn !py-2 text-sm">← Customer</a> : <button className="btn !py-2 text-sm" onClick={() => setStep(step - 1)}>← Back</button>}
+          {step === 1 ? <a href="/" className="btn !py-2 text-sm">← Customer</a> : <button className="btn !py-2 text-sm" onClick={() => window.history.back()}>← Back</button>}
           <div className="text-xs text-muted hidden sm:block flex-1 px-2">
             {step === 1 && (tiles.length ? `${tiles.length} ${tiles.length === 1 ? "tile" : "tiles"} selected` : "Select at least one tile")}
             {step === 2 && (bookmatch ? "Book match on" : "Book match off, full slabs")}
             {step === 3 && (scene ? "Room selected" : "Select a room to continue")}
             {step === 4 && (selected.length ? `Applying to ${effectiveLabel}` : "Pick at least one area")}
           </div>
-          {step === 1 && <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length} onClick={() => setStep(2)}>Next: book match →</button>}
-          {step === 2 && <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length} onClick={() => setStep(3)}>Next: room →</button>}
-          {step === 3 && <button className="btn btn-gold !py-2 text-sm" disabled={!scene} onClick={() => setStep(4)}>Next: surface →</button>}
+          {step === 1 && <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length} onClick={() => navigate(2)}>Next: book match →</button>}
+          {step === 2 && <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length} onClick={() => navigate(3)}>Next: room →</button>}
+          {step === 3 && <button className="btn btn-gold !py-2 text-sm" disabled={!scene} onClick={() => navigate(4)}>Next: surface →</button>}
           {step === 4 && (
             <div className="flex items-end gap-2.5">
               <div className="w-[200px] hidden sm:block"><ModelSelect models={models} value={model} onChange={setModel} dropUp hideLabel /></div>

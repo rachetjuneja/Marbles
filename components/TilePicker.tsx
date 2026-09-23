@@ -9,6 +9,7 @@ import UploadDialog from "./UploadDialog";
 export type PickedStone = StoneMeta & { imageUrl: string };
 
 const emptyForm = { name: "", stoneType: "Marble", origin: "", size: "", thickness: "", finish: "Polished", price: "", slabs: "", lotNo: "" };
+const LOW_STOCK = 5;
 
 function coverage(s: PickedStone) {
   const slab = parseSlab(s.size);
@@ -19,41 +20,40 @@ function totalArea(s: PickedStone) {
   return s.slabsInStock && c ? Math.round(s.slabsInStock * c) : 0;
 }
 
-/** A single marble shown as a rounded diamond with the texture and a soft shadow. */
-function Diamond({ s, on, onClick, onInfo }: { s: PickedStone; on: boolean; onClick: () => void; onInfo: () => void }) {
+/** An inventory card: image, specs, stock, and explicit Select / Details buttons. */
+function InventoryCard({ s, on, onToggle, onInfo }: { s: PickedStone; on: boolean; onToggle: () => void; onInfo: () => void }) {
   const ta = totalArea(s);
+  const low = s.slabsInStock != null && s.slabsInStock <= LOW_STOCK;
   return (
-    <div className="group flex flex-col items-center gap-2.5">
-      <div className="relative w-full aspect-square grid place-items-center">
-        <button
-          onClick={onClick}
-          className="absolute inset-0 grid place-items-center transition-transform duration-200 group-hover:scale-[1.05] outline-none"
-          style={{ filter: on ? "drop-shadow(0 14px 26px rgba(201,162,94,0.45))" : "drop-shadow(0 16px 24px rgba(0,0,0,0.6))" }}
-        >
-          <span className={`relative block w-[70%] h-[70%] rotate-45 rounded-[26%] overflow-hidden ring-1 transition-all ${on ? "ring-2 ring-accent" : "ring-white/10 group-hover:ring-accent/50"}`}>
-            <img src={s.imageUrl} alt={s.name} className="w-full h-full object-cover" />
-            <span className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(120% 120% at 28% 22%, rgba(255,255,255,0.22), rgba(255,255,255,0) 55%)" }} />
-          </span>
-        </button>
-        {on && (
-          <span className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/3 w-5 h-5 rounded-full bg-accent text-[#1a1508] grid place-items-center text-[11px] font-bold shadow-lg pointer-events-none">✓</span>
-        )}
-        <button
-          onClick={onInfo}
-          title="Details"
-          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 border border-line text-muted hover:text-accent hover:border-accent/60 grid place-items-center text-xs z-10"
-        >
-          ⓘ
-        </button>
-      </div>
-      <button onClick={onClick} className="text-center leading-tight px-1 outline-none">
-        <div className={`text-[12px] font-medium truncate max-w-[150px] ${on ? "text-ink" : "text-ink/90"}`}>{s.name}</div>
-        {s.size && <div className="text-[10px] text-muted truncate max-w-[150px]">{s.size}</div>}
-        {s.pricePerSqft ? <div className="text-[10px] text-accent">₹{s.pricePerSqft}/sq ft</div> : null}
+    <div className={`rounded-2xl border bg-panel2 overflow-hidden transition-all ${on ? "border-accent ring-1 ring-accent/40" : "border-line"}`}>
+      <div className="relative aspect-[16/10]">
+        <img src={s.imageUrl} alt={s.name} className="w-full h-full object-cover" />
         {s.slabsInStock != null && (
-          <div className="text-[10px] text-muted mt-0.5">{s.slabsInStock} slabs{ta ? ` · ~${ta} sq ft` : ""}</div>
+          <span className={`absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-black/60 border ${low ? "border-danger/60 text-danger" : "border-white/25 text-white/80"}`}>
+            {low ? "Low stock" : "In stock"} · {s.slabsInStock}
+          </span>
         )}
-      </button>
+        {on && <span className="absolute top-2 left-2 w-6 h-6 rounded-full bg-accent text-[#1a1508] grid place-items-center text-xs font-bold shadow">✓</span>}
+      </div>
+      <div className="p-3.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="font-medium truncate">{s.name}</div>
+            <div className="text-[11px] text-muted truncate">{[s.size, s.finish, s.origin].filter(Boolean).join(" · ")}</div>
+          </div>
+          {s.stoneType && <span className="text-[10px] uppercase tracking-wide text-faint border border-line rounded px-1.5 py-0.5 shrink-0">{s.stoneType}</span>}
+        </div>
+        <div className="flex items-center justify-between mt-2.5">
+          {s.pricePerSqft ? (
+            <div className="text-accent text-sm font-semibold">₹{s.pricePerSqft}<span className="text-[11px] text-muted font-normal">/sq ft</span></div>
+          ) : <div />}
+          {s.slabsInStock != null && <div className="text-[11px] text-muted">{s.slabsInStock} slabs{ta ? ` · ~${ta} sq ft` : ""}</div>}
+        </div>
+        <div className="flex gap-2 mt-3.5">
+          <button className={`btn !py-1.5 text-xs flex-1 justify-center ${on ? "" : "btn-gold"}`} onClick={onToggle}>{on ? "Selected ✓" : "Select"}</button>
+          <button className="btn !py-1.5 text-xs flex-1 justify-center" onClick={onInfo}>Details</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -184,7 +184,7 @@ export default function TilePicker({
         </h3>
         <button className="btn !py-1.5 !px-3 text-xs" onClick={() => setOpen(true)}>Upload</button>
       </div>
-      <p className="text-muted text-xs mb-4">Pick as many marbles as you want to compare. Each one is rendered into the room. Tap ⓘ for the full spec sheet.</p>
+      <p className="text-muted text-xs mb-4">Pick as many marbles as you want to compare. Each one is rendered into the room.</p>
 
       {/* Inventory toolbar */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
@@ -215,8 +215,8 @@ export default function TilePicker({
       {shown.length === 0 ? (
         <div className="text-faint text-sm text-center border border-dashed border-line rounded-xl py-12">No marbles match. Adjust the filters, or upload a slab.</div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-6">
-          {shown.map((s) => <Diamond key={s.imageUrl} s={s} on={has(s.imageUrl)} onClick={() => toggle(s)} onInfo={() => setDetail(s)} />)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {shown.map((s) => <InventoryCard key={s.imageUrl} s={s} on={has(s.imageUrl)} onToggle={() => toggle(s)} onInfo={() => setDetail(s)} />)}
         </div>
       )}
 
