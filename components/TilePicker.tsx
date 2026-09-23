@@ -25,15 +25,16 @@ function InventoryCard({ s, on, onToggle, onInfo }: { s: PickedStone; on: boolea
   const ta = totalArea(s);
   const low = s.slabsInStock != null && s.slabsInStock <= LOW_STOCK;
   return (
-    <div className={`rounded-2xl border bg-panel2 overflow-hidden transition-all ${on ? "border-accent ring-1 ring-accent/40" : "border-line"}`}>
-      <div className="relative aspect-[16/10]">
-        <img src={s.imageUrl} alt={s.name} className="w-full h-full object-cover" />
+    <div className={`group relative rounded-2xl border bg-panel2 overflow-hidden transition-all duration-200 ${on ? "border-accent ring-1 ring-accent/45 shadow-[0_14px_34px_-14px_rgba(201,162,94,0.55)]" : "border-line hover:border-white/20"}`}>
+      <div className="relative aspect-[16/10] overflow-hidden">
+        <img src={s.imageUrl} alt={s.name} className={`w-full h-full object-cover transition-transform duration-300 ${on ? "scale-[1.03]" : "group-hover:scale-[1.02]"}`} />
+        <div className="absolute inset-0 pointer-events-none transition-opacity duration-200" style={{ opacity: on ? 1 : 0, boxShadow: "inset 0 0 0 2px rgba(201,162,94,0.55)" }} />
         {s.slabsInStock != null && (
           <span className={`absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-black/60 border ${low ? "border-danger/60 text-danger" : "border-white/25 text-white/80"}`}>
             {low ? "Low stock" : "In stock"} · {s.slabsInStock}
           </span>
         )}
-        {on && <span className="absolute top-2 left-2 w-6 h-6 rounded-full bg-accent text-[#1a1508] grid place-items-center text-xs font-bold shadow">✓</span>}
+        <span className={`absolute top-2 left-2 w-7 h-7 rounded-full bg-accent text-[#1a1508] grid place-items-center text-sm font-bold shadow-lg transition-all duration-200 ${on ? "scale-100 opacity-100" : "scale-0 opacity-0"}`}>✓</span>
       </div>
       <div className="p-3.5">
         <div className="flex items-start justify-between gap-2">
@@ -50,7 +51,18 @@ function InventoryCard({ s, on, onToggle, onInfo }: { s: PickedStone; on: boolea
           {s.slabsInStock != null && <div className="text-[11px] text-muted">{s.slabsInStock} slabs{ta ? ` · ~${ta} sq ft` : ""}</div>}
         </div>
         <div className="flex gap-2 mt-3.5">
-          <button className={`btn !py-1.5 text-xs flex-1 justify-center ${on ? "" : "btn-gold"}`} onClick={onToggle}>{on ? "Selected ✓" : "Select"}</button>
+          <button
+            onClick={onToggle}
+            title={on ? "Click to remove" : "Click to select"}
+            className={`btn !py-1.5 text-xs flex-1 justify-center transition-colors group/sel active:scale-[0.97] ${on ? "!border-accent !text-accent hover:!border-danger hover:!text-danger" : "btn-gold"}`}
+          >
+            {on ? (
+              <>
+                <span className="group-hover/sel:hidden">✓ Selected</span>
+                <span className="hidden group-hover/sel:inline">Remove ✕</span>
+              </>
+            ) : "Select"}
+          </button>
           <button className="btn !py-1.5 text-xs flex-1 justify-center" onClick={onInfo}>Details</button>
         </div>
       </div>
