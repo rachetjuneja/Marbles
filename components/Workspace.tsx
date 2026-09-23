@@ -18,7 +18,7 @@ type Gen = { id: string; tile: PickedStone; url: string | null; status: "pending
 type Area = { id: string; label: string; surface: Surface; promptLabel?: string };
 
 // The journey: Customer (done on the entry screen), then these five.
-const STEP_LABELS = ["Customer", "Tiles", "Room", "Surface", "Book match", "Result"];
+const STEP_LABELS = ["Customer", "Tiles", "Book match", "Room", "Surface", "Result"];
 
 export default function Workspace({
   projectId,
@@ -33,7 +33,7 @@ export default function Workspace({
 }) {
   const firstAvail = models.find((m) => m.available)?.id || models[0]?.id;
 
-  const [step, setStep] = useState(1); // 1 Tiles, 2 Room, 3 Surface, 4 Book match, 5 Result
+  const [step, setStep] = useState(1); // 1 Tiles, 2 Book match, 3 Room, 4 Surface, 5 Result
   const [scene, setScene] = useState<SceneRef | null>(null);
 
   // Detection + surface selection (multiple areas allowed)
@@ -198,14 +198,14 @@ export default function Workspace({
   function goStep(t: number) {
     if (t >= 1 && t <= step) { setStep(t); return; }
     if (t === 2 && tiles.length) setStep(2);
-    else if (t === 3 && tiles.length && scene && !detecting) setStep(3);
-    else if (t === 4 && tiles.length && scene && selected.length) setStep(4);
+    else if (t === 3 && tiles.length) setStep(3);
+    else if (t === 4 && tiles.length && scene && !detecting) setStep(4);
     else if (t === 5 && gens.length) setStep(5);
   }
 
   const doneCount = gens.filter((g) => g.status !== "pending").length;
 
-  const overlayVisible = showOverlay && step === 3 && !!scene && detected.length > 0;
+  const overlayVisible = showOverlay && step === 4 && !!scene && detected.length > 0;
   const stage = (
     <div ref={stageRef} className="relative rounded-2xl overflow-hidden border border-line bg-black aspect-[16/10]">
       {scene ? (
@@ -224,17 +224,17 @@ export default function Workspace({
           />
         </div>
       )}
-      {scene && step === 3 && selected.length > 0 && (
+      {scene && step === 4 && selected.length > 0 && (
         <div className="absolute left-3 top-3 text-[11px] px-2 py-1 rounded-md bg-black/70 border border-line pointer-events-none max-w-[80%]">
           Applying to <span className="text-accent font-medium">{effectiveLabel}</span>
         </div>
       )}
-      {detecting && (step === 2 || step === 3) && (
+      {detecting && (step === 3 || step === 4) && (
         <div className="absolute left-3 top-3 text-[11px] px-2 py-1 rounded-md bg-black/70 border border-line text-muted pointer-events-none animate-pulse">
           ◍ Analysing room…
         </div>
       )}
-      {detected.length > 0 && step === 3 && (
+      {detected.length > 0 && step === 4 && (
         <button className="absolute left-3 bottom-3 btn !py-1 !px-2 text-[11px]" onClick={() => setShowOverlay((v) => !v)}>
           {showOverlay ? "Hide surfaces" : "Show surfaces"}
         </button>
@@ -319,20 +319,30 @@ export default function Workspace({
           </div>
         )}
 
-        {(step === 2 || step === 3) && (
+        {step === 2 && (
+          <div className="max-w-2xl mx-auto flex flex-col gap-4">
+            <div>
+              <h2 className="font-display text-xl">Book match</h2>
+              <div className="text-muted text-xs mt-0.5">Set how the slabs are laid out. This exact layout is what gets rendered into the room.</div>
+            </div>
+            {bookmatchPanel}
+          </div>
+        )}
+
+        {(step === 3 || step === 4) && (
           <div className="grid lg:grid-cols-[1fr_380px] gap-5">
             <div className="min-w-0">
               {stage}
               <div className="text-muted text-xs mt-2">
-                {step === 2 && "Choose a room from the library, or scan the QR to let the customer send a photo from their phone."}
-                {step === 3 && (selected.length ? `Marble will be applied to ${effectiveLabel}. Next, set the book match layout.` : "Tick the areas the marble should cover.")}
+                {step === 3 && "Choose a room from the library, or scan the QR to let the customer send a photo from their phone."}
+                {step === 4 && (selected.length ? `Marble will be applied to ${effectiveLabel}. Then generate.` : "Tick the areas the marble should cover.")}
               </div>
             </div>
 
             <div className="flex flex-col gap-4">
-              {step === 2 && <ScenePicker projectId={projectId} value={scene} onChange={setScene} />}
+              {step === 3 && <ScenePicker projectId={projectId} value={scene} onChange={setScene} />}
 
-              {step === 3 && (
+              {step === 4 && (
                 <>
                   <div className="card p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -386,16 +396,6 @@ export default function Workspace({
                 </>
               )}
             </div>
-          </div>
-        )}
-
-        {step === 4 && (
-          <div className="max-w-2xl mx-auto flex flex-col gap-4">
-            <div>
-              <h2 className="font-display text-xl">Book match</h2>
-              <div className="text-muted text-xs mt-0.5">Set how the slabs are laid out for {effectiveLabel}. This exact layout is what gets rendered.</div>
-            </div>
-            {bookmatchPanel}
           </div>
         )}
 
@@ -455,13 +455,13 @@ export default function Workspace({
           {step === 1 ? <a href="/" className="btn !py-2 text-sm">← Customer</a> : <button className="btn !py-2 text-sm" onClick={() => setStep(step - 1)}>← Back</button>}
           <div className="text-xs text-muted hidden sm:block flex-1 px-2">
             {step === 1 && (tiles.length ? `${tiles.length} ${tiles.length === 1 ? "tile" : "tiles"} selected` : "Select at least one tile")}
-            {step === 2 && (scene ? "Room selected" : "Select a room to continue")}
-            {step === 3 && (selected.length ? `Applying to ${effectiveLabel}` : "Pick at least one area")}
-            {step === 4 && (bookmatch ? "Book match on" : "Book match off, full slabs")}
+            {step === 2 && (bookmatch ? "Book match on" : "Book match off, full slabs")}
+            {step === 3 && (scene ? "Room selected" : "Select a room to continue")}
+            {step === 4 && (selected.length ? `Applying to ${effectiveLabel}` : "Pick at least one area")}
           </div>
-          {step === 1 && <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length} onClick={() => setStep(2)}>Next: room →</button>}
-          {step === 2 && <button className="btn btn-gold !py-2 text-sm" disabled={!scene} onClick={() => setStep(3)}>Next: surface →</button>}
-          {step === 3 && <button className="btn btn-gold !py-2 text-sm" disabled={!selected.length} onClick={() => setStep(4)}>Next: book match →</button>}
+          {step === 1 && <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length} onClick={() => setStep(2)}>Next: book match →</button>}
+          {step === 2 && <button className="btn btn-gold !py-2 text-sm" disabled={!tiles.length} onClick={() => setStep(3)}>Next: room →</button>}
+          {step === 3 && <button className="btn btn-gold !py-2 text-sm" disabled={!scene} onClick={() => setStep(4)}>Next: surface →</button>}
           {step === 4 && (
             <div className="flex items-end gap-2.5">
               <div className="w-[200px] hidden sm:block"><ModelSelect models={models} value={model} onChange={setModel} dropUp hideLabel /></div>
